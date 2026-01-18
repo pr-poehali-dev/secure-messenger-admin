@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import func2url from '../../backend/func2url.json';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -39,32 +40,77 @@ interface AdminStat {
   trend: string;
 }
 
+const API_URL = func2url.messages;
+const CURRENT_USER_ID = 1;
+
 const Index = () => {
   const [activeTab, setActiveTab] = useState<'chats' | 'contacts' | 'profile' | 'admin'>('chats');
   const [selectedChat, setSelectedChat] = useState<number>(1);
   const [messageInput, setMessageInput] = useState('');
   const [isAdmin] = useState(true);
+  const [chats, setChats] = useState<Chat[]>([]);
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [loading, setLoading] = useState(false);
 
-  const chats: Chat[] = [
-    { id: 1, name: 'Анна Смирнова', lastMessage: 'Привет! Как дела?', time: '14:32', unread: 2, avatar: '👩', online: true },
-    { id: 2, name: 'Иван Петров', lastMessage: 'Отправил файлы', time: '13:15', unread: 0, avatar: '👨', online: false },
-    { id: 3, name: 'Команда разработки', lastMessage: 'Созвон в 15:00', time: '12:45', unread: 5, avatar: '👥', online: true },
-    { id: 4, name: 'Мария Кузнецова', lastMessage: 'Спасибо за помощь!', time: 'Вчера', unread: 0, avatar: '👱‍♀️', online: false },
-    { id: 5, name: 'Алексей Новиков', lastMessage: 'Встречаемся завтра', time: 'Вчера', unread: 1, avatar: '🧑', online: true },
-  ];
+  useEffect(() => {
+    loadChats();
+    loadContacts();
+  }, []);
 
-  const contacts: Contact[] = [
-    { id: 1, name: 'Анна Смирнова', status: 'В сети', avatar: '👩', online: true },
-    { id: 2, name: 'Иван Петров', status: 'Был 2 часа назад', avatar: '👨', online: false },
-    { id: 3, name: 'Мария Кузнецова', status: 'В сети', avatar: '👱‍♀️', online: true },
-    { id: 4, name: 'Алексей Новиков', status: 'Был вчера', avatar: '🧑', online: false },
-  ];
+  useEffect(() => {
+    if (selectedChat) {
+      loadMessages(selectedChat);
+    }
+  }, [selectedChat]);
 
-  const messages: Message[] = [
-    { id: 1, text: 'Привет! Как твой проект?', sender: 'other', time: '14:30', encrypted: true },
-    { id: 2, text: 'Отлично! Почти закончил', sender: 'me', time: '14:31', encrypted: true },
-    { id: 3, text: 'Привет! Как дела?', sender: 'other', time: '14:32', encrypted: true },
-  ];
+  const loadChats = async () => {
+    try {
+      const response = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'get_chats', user_id: CURRENT_USER_ID })
+      });
+      const data = await response.json();
+      if (data.chats) {
+        setChats(data.chats);
+      }
+    } catch (error) {
+      console.error('Error loading chats:', error);
+    }
+  };
+
+  const loadContacts = async () => {
+    try {
+      const response = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'get_contacts', user_id: CURRENT_USER_ID })
+      });
+      const data = await response.json();
+      if (data.contacts) {
+        setContacts(data.contacts);
+      }
+    } catch (error) {
+      console.error('Error loading contacts:', error);
+    }
+  };
+
+  const loadMessages = async (chatId: number) => {
+    try {
+      const response = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'get_messages', chat_id: chatId, user_id: CURRENT_USER_ID })
+      });
+      const data = await response.json();
+      if (data.messages) {
+        setMessages(data.messages);
+      }
+    } catch (error) {
+      console.error('Error loading messages:', error);
+    }
+  };
 
   const adminStats: AdminStat[] = [
     { label: 'Активных пользователей', value: '1,234', icon: 'Users', trend: '+12%' },
@@ -73,9 +119,31 @@ const Index = () => {
     { label: 'Время отклика', value: '1.2s', icon: 'Zap', trend: '-5%' },
   ];
 
-  const handleSendMessage = () => {
-    if (messageInput.trim()) {
-      setMessageInput('');
+  const handleSendMessage = async () => {
+    if (messageInput.trim() && selectedChat) {
+      setLoading(true);
+      try {
+        const response = await fetch(API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'send_message',
+            chat_id: selectedChat,
+            sender_id: CURRENT_USER_ID,
+            text: messageInput
+          })
+        });
+        const data = await response.json();
+        if (data.id) {
+          setMessages([...messages, data]);
+          setMessageInput('');
+          loadChats();
+        }
+      } catch (error) {
+        console.error('Error sending message:', error);
+      } finally {
+        setLoading(false);
+      }
     }
   };
 

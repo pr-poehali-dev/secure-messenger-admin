@@ -1,0 +1,65 @@
+{
+  "tests": [
+    {
+      "name": "Получить список чатов",
+      "method": "POST",
+      "path": "/",
+      "body": {
+        "action": "get_chats",
+        "user_id": "1"
+      },
+      "expectedStatus": 200,
+      "expectedBody": {
+        "chats": "array"
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Получить сообщения чата",
+      "method": "POST",
+      "path": "/",
+      "body": {
+        "action": "get_messages",
+        "chat_id": "1",
+        "user_id": "1"
+      },
+      "expectedStatus": 200,
+      "expectedBody": {
+        "messages": "array"
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Отправить новое сообщение",
+      "method": "POST",
+      "path": "/",
+      "body": {
+        "action": "send_message",
+        "chat_id": 1,
+        "sender_id": 1,
+        "text": "Тестовое сообщение"
+      },
+      "expectedStatus": 201,
+      "expectedBody": {
+        "id": "number",
+        "text": "string",
+        "encrypted": true
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Получить список контактов",
+      "method": "POST",
+      "path": "/",
+      "body": {
+        "action": "get_contacts",
+        "user_id": "1"
+      },
+      "expectedStatus": 200,
+      "expectedBody": {
+        "contacts": "array"
+      },
+      "bodyMatcher": "partial"
+    }
+  ]
+}
