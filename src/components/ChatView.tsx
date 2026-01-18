@@ -1,8 +1,11 @@
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import Icon from '@/components/ui/icon';
+import EmojiPicker from 'emoji-picker-react';
+import func2url from '../../backend/func2url.json';
 
 interface Message {
   id: number;
@@ -41,13 +44,64 @@ export default function ChatView({
   setMessageInput,
   handleSendMessage
 }: ChatViewProps) {
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showCreateChannel, setShowCreateChannel] = useState(false);
+  const [channelName, setChannelName] = useState('');
+  const [channelDesc, setChannelDesc] = useState('');
+  const [channelEmoji, setChannelEmoji] = useState('📢');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setSelectedFile(e.target.files[0]);
+    }
+  };
+  
+  const handleCreateChannel = async () => {
+    if (!channelName.trim()) return;
+    
+    try {
+      const response = await fetch(func2url.messages, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'create_channel',
+          name: channelName,
+          description: channelDesc,
+          avatar_emoji: channelEmoji,
+          creator_id: 1,
+          is_channel: true
+        })
+      });
+      const data = await response.json();
+      if (data.success) {
+        setShowCreateChannel(false);
+        setChannelName('');
+        setChannelDesc('');
+        setChannelEmoji('📢');
+        window.location.reload();
+      }
+    } catch (error) {
+      console.error('Error creating channel:', error);
+    }
+  };
+  
   return (
     <>
       <div className="w-96 bg-white/60 backdrop-blur-lg border-r border-purple-100 flex flex-col">
         <div className="p-6 border-b border-purple-100">
-          <h1 className="text-2xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent mb-4">
-            Чаты
-          </h1>
+          <div className="flex items-center justify-between mb-4">
+            <h1 className="text-2xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+              Чаты
+            </h1>
+            <Button
+              onClick={() => setShowCreateChannel(true)}
+              size="sm"
+              className="gradient-purple text-white rounded-full"
+            >
+              <Icon name="Plus" size={16} />
+            </Button>
+          </div>
           <div className="relative">
             <Icon name="Search" size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <Input placeholder="Поиск чатов..." className="pl-10 rounded-2xl border-purple-200 focus:border-purple-400" />
@@ -153,22 +207,61 @@ export default function ChatView({
           </div>
         </ScrollArea>
 
-        <div className="p-6 border-t border-purple-100 bg-white/60 backdrop-blur-lg">
+        <div className="p-6 border-t border-purple-100 bg-white/60 backdrop-blur-lg relative">
+          {showEmojiPicker && (
+            <div className="absolute bottom-full right-0 mb-2 z-50">
+              <EmojiPicker
+                onEmojiClick={(emoji) => {
+                  setMessageInput(messageInput + emoji.emoji);
+                  setShowEmojiPicker(false);
+                }}
+              />
+            </div>
+          )}
+          
+          {selectedFile && (
+            <div className="mb-3 flex items-center gap-2 p-2 bg-purple-50 rounded-lg">
+              <Icon name="File" size={16} className="text-purple-600" />
+              <span className="text-sm flex-1 truncate">{selectedFile.name}</span>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setSelectedFile(null)}
+                className="h-6 w-6 p-0 rounded-full"
+              >
+                <Icon name="X" size={14} />
+              </Button>
+            </div>
+          )}
+          
           <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" className="rounded-full hover:bg-purple-100">
-              <Icon name="Plus" size={24} />
+            <input
+              type="file"
+              id="file-upload"
+              className="hidden"
+              onChange={handleFileSelect}
+            />
+            <Button
+              variant="ghost"
+              size="icon"
+              className="rounded-full hover:bg-purple-100"
+              onClick={() => document.getElementById('file-upload')?.click()}
+            >
+              <Icon name="Paperclip" size={20} />
             </Button>
             <Input
               value={messageInput}
               onChange={(e) => setMessageInput(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+              onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && handleSendMessage()}
               placeholder="Введите сообщение..."
               className="rounded-full border-purple-200 focus:border-purple-400 bg-white"
             />
-            <Button variant="ghost" size="icon" className="rounded-full hover:bg-purple-100">
-              <Icon name="Paperclip" size={20} />
-            </Button>
-            <Button variant="ghost" size="icon" className="rounded-full hover:bg-purple-100">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="rounded-full hover:bg-purple-100"
+              onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+            >
               <Icon name="Smile" size={20} />
             </Button>
             <Button
@@ -184,6 +277,71 @@ export default function ChatView({
           </div>
         </div>
       </div>
+      
+      {showCreateChannel && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl animate-fade-in">
+            <h2 className="text-2xl font-bold mb-6 bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+              Создать канал
+            </h2>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="text-sm font-medium mb-2 block">Эмодзи</label>
+                <div className="flex gap-2">
+                  {['📢', '🎨', '💻', '🚀', '💡', '🎯', '🌟', '🔥'].map((emoji) => (
+                    <button
+                      key={emoji}
+                      onClick={() => setChannelEmoji(emoji)}
+                      className={`text-3xl p-2 rounded-lg transition-all ${
+                        channelEmoji === emoji ? 'bg-purple-100 scale-110' : 'hover:bg-gray-100'
+                      }`}
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              
+              <div>
+                <label className="text-sm font-medium mb-2 block">Название канала</label>
+                <Input
+                  value={channelName}
+                  onChange={(e) => setChannelName(e.target.value)}
+                  placeholder="Введите название..."
+                  className="rounded-2xl border-purple-200"
+                />
+              </div>
+              
+              <div>
+                <label className="text-sm font-medium mb-2 block">Описание</label>
+                <Input
+                  value={channelDesc}
+                  onChange={(e) => setChannelDesc(e.target.value)}
+                  placeholder="О чем ваш канал?"
+                  className="rounded-2xl border-purple-200"
+                />
+              </div>
+            </div>
+            
+            <div className="flex gap-3 mt-6">
+              <Button
+                variant="outline"
+                onClick={() => setShowCreateChannel(false)}
+                className="flex-1 rounded-full"
+              >
+                Отмена
+              </Button>
+              <Button
+                onClick={handleCreateChannel}
+                className="flex-1 rounded-full gradient-purple text-white"
+              >
+                Создать
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

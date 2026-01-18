@@ -265,6 +265,220 @@ def handler(event: dict, context) -> dict:
                 'isBase64Encoded': False
             }
         
+        elif action == 'create_channel':
+            body = json.loads(event.get('body', '{}'))
+            name = body.get('name')
+            description = body.get('description', '')
+            avatar_emoji = body.get('avatar_emoji', '📢')
+            creator_id = body.get('creator_id', 1)
+            is_channel = body.get('is_channel', True)
+            
+            if not name:
+                cur.close()
+                conn.close()
+                return {
+                    'statusCode': 400,
+                    'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                    'body': json.dumps({'error': 'Missing name'}),
+                    'isBase64Encoded': False
+                }
+            
+            cur.execute('''
+                INSERT INTO chats (name, is_group, is_channel, avatar_emoji, description, created_by, subscribers_count)
+                VALUES (%s, true, %s, %s, %s, %s, 1)
+                RETURNING id
+            ''', (name, is_channel, avatar_emoji, description, creator_id))
+            
+            chat_id = cur.fetchone()[0]
+            
+            cur.execute('INSERT INTO chat_members (chat_id, user_id) VALUES (%s, %s)', (chat_id, creator_id))
+            conn.commit()
+            
+            cur.close()
+            conn.close()
+            
+            return {
+                'statusCode': 201,
+                'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                'body': json.dumps({'id': chat_id, 'name': name, 'success': True}),
+                'isBase64Encoded': False
+            }
+        
+        elif action == 'get_all_users':
+            cur.execute('''
+                SELECT
+                    u.id,
+                    u.display_name,
+                    u.username,
+                    u.avatar_emoji,
+                    u.is_online,
+                    u.is_admin,
+                    u.created_at,
+                    EXISTS(SELECT 1 FROM user_blocks WHERE user_id = u.id AND is_active = true) as is_blocked
+                FROM users u
+                ORDER BY u.created_at DESC
+            ''')
+            
+            users = []
+            for row in cur.fetchall():
+                uid, name, username, avatar, online, is_admin, created, is_blocked = row
+                users.append({
+                    'id': uid,
+                    'name': name,
+                    'username': username,
+                    'avatar': avatar or '👤',
+                    'online': online,
+                    'isAdmin': is_admin,
+                    'isBlocked': is_blocked,
+                    'createdAt': created.strftime('%Y-%m-%d')
+                })
+            
+            cur.close()
+            conn.close()
+            
+            return {
+                'statusCode': 200,
+                'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                'body': json.dumps({'users': users}),
+                'isBase64Encoded': False
+            }
+        
+        elif action == 'block_user':
+            body = json.loads(event.get('body', '{}'))
+            user_id = body.get('user_id')
+            blocked_by = body.get('blocked_by', 1)
+            reason = body.get('reason', 'Нарушение правил')
+            
+            if not user_id:
+                cur.close()
+                conn.close()
+                return {
+                    'statusCode': 400,
+                    'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                    'body': json.dumps({'error': 'Missing user_id'}),
+                    'isBase64Encoded': False
+                }
+            
+            cur.execute('''
+                INSERT INTO user_blocks (user_id, blocked_by, reason, is_active)
+                VALUES (%s, %s, %s, true)
+            ''', (user_id, blocked_by, reason))
+            conn.commit()
+            
+            cur.close()
+            conn.close()
+            
+            return {
+                'statusCode': 200,
+                'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                'body': json.dumps({'success': True, 'message': 'User blocked'}),
+                'isBase64Encoded': False
+            }
+        
+        elif action == 'unblock_user':
+            body = json.loads(event.get('body', '{}'))
+            user_id = body.get('user_id')
+            
+            if not user_id:
+                cur.close()
+                conn.close()
+                return {
+                    'statusCode': 400,
+                    'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                    'body': json.dumps({'error': 'Missing user_id'}),
+                    'isBase64Encoded': False
+                }
+            
+            cur.execute('''
+                UPDATE user_blocks
+                SET is_active = false, unblocked_at = CURRENT_TIMESTAMP
+                WHERE user_id = %s AND is_active = true
+            ''', (user_id,))
+            conn.commit()
+            
+            cur.close()
+            conn.close()
+            
+            return {
+                'statusCode': 200,
+                'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                'body': json.dumps({'success': True, 'message': 'User unblocked'}),
+                'isBase64Encoded': False
+            }
+        
+        elif action == 'get_user_rating':
+            user_id = body_params.get('user_id') or query_params.get('user_id', '1')
+            
+            cur.execute('''
+                SELECT
+                    messages_sent,
+                    messages_received,
+                    calls_made,
+                    files_shared,
+                    rating_score,
+                    last_activity
+                FROM user_activity
+                WHERE user_id = %s
+            ''', (user_id,))
+            
+            row = cur.fetchone()
+            if row:
+                msgs_sent, msgs_recv, calls, files, rating, last_act = row
+                rating_data = {
+                    'messagesSent': msgs_sent,
+                    'messagesReceived': msgs_recv,
+                    'callsMade': calls,
+                    'filesShared': files,
+                    'ratingScore': rating,
+                    'lastActivity': last_act.strftime('%Y-%m-%d %H:%M') if last_act else ''
+                }
+            else:
+                rating_data = {
+                    'messagesSent': 0,
+                    'messagesReceived': 0,
+                    'callsMade': 0,
+                    'filesShared': 0,
+                    'ratingScore': 100,
+                    'lastActivity': ''
+                }
+            
+            cur.close()
+            conn.close()
+            
+            return {
+                'statusCode': 200,
+                'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                'body': json.dumps(rating_data),
+                'isBase64Encoded': False
+            }
+        
+        elif action == 'create_invite':
+            body = json.loads(event.get('body', '{}'))
+            inviter_id = body.get('inviter_id', 1)
+            
+            import random
+            import string
+            invite_code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
+            
+            cur.execute('''
+                INSERT INTO friend_invites (inviter_id, invite_code)
+                VALUES (%s, %s)
+                RETURNING id
+            ''', (inviter_id, invite_code))
+            
+            invite_id = cur.fetchone()[0]
+            conn.commit()
+            
+            cur.close()
+            conn.close()
+            
+            return {
+                'statusCode': 201,
+                'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                'body': json.dumps({'inviteCode': invite_code, 'id': invite_id}),
+                'isBase64Encoded': False
+            }
+        
         else:
             cur.close()
             conn.close()

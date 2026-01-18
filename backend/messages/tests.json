@@ -60,6 +60,66 @@
         "contacts": "array"
       },
       "bodyMatcher": "partial"
+    },
+    {
+      "name": "Создать новый канал",
+      "method": "POST",
+      "path": "/",
+      "body": {
+        "action": "create_channel",
+        "name": "Тестовый канал",
+        "description": "Описание канала",
+        "avatar_emoji": "🚀",
+        "creator_id": 1,
+        "is_channel": true
+      },
+      "expectedStatus": 201,
+      "expectedBody": {
+        "id": "number",
+        "success": true
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Получить всех пользователей",
+      "method": "POST",
+      "path": "/",
+      "body": {
+        "action": "get_all_users"
+      },
+      "expectedStatus": 200,
+      "expectedBody": {
+        "users": "array"
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Получить рейтинг пользователя",
+      "method": "POST",
+      "path": "/",
+      "body": {
+        "action": "get_user_rating",
+        "user_id": "1"
+      },
+      "expectedStatus": 200,
+      "expectedBody": {
+        "ratingScore": "number"
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Создать инвайт-код",
+      "method": "POST",
+      "path": "/",
+      "body": {
+        "action": "create_invite",
+        "inviter_id": 1
+      },
+      "expectedStatus": 201,
+      "expectedBody": {
+        "inviteCode": "string"
+      },
+      "bodyMatcher": "partial"
     }
   ]
 }

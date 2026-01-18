@@ -1,6 +1,10 @@
+import { useState, useEffect } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import Icon from '@/components/ui/icon';
+import func2url from '../../backend/func2url.json';
 
 interface AdminStat {
   label: string;
@@ -13,7 +17,87 @@ interface AdminViewProps {
   adminStats: AdminStat[];
 }
 
+interface User {
+  id: number;
+  name: string;
+  username: string;
+  avatar: string;
+  online: boolean;
+  isAdmin: boolean;
+  isBlocked: boolean;
+  createdAt: string;
+}
+
 export default function AdminView({ adminStats }: AdminViewProps) {
+  const [users, setUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(false);
+  
+  useEffect(() => {
+    loadUsers();
+  }, []);
+  
+  const loadUsers = async () => {
+    try {
+      const response = await fetch(func2url.messages, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'get_all_users' })
+      });
+      const data = await response.json();
+      if (data.users) {
+        setUsers(data.users);
+      }
+    } catch (error) {
+      console.error('Error loading users:', error);
+    }
+  };
+  
+  const handleBlockUser = async (userId: number) => {
+    setLoading(true);
+    try {
+      const response = await fetch(func2url.messages, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'block_user',
+          user_id: userId,
+          blocked_by: 1,
+          reason: 'Блокировка администратором'
+        })
+      });
+      const data = await response.json();
+      if (data.success) {
+        loadUsers();
+      }
+    } catch (error) {
+      console.error('Error blocking user:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  const handleUnblockUser = async (userId: number) => {
+    setLoading(true);
+    try {
+      const response = await fetch(func2url.messages, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'unblock_user',
+          user_id: userId
+        })
+      });
+      const data = await response.json();
+      if (data.success) {
+        loadUsers();
+      }
+    } catch (error) {
+      console.error('Error unblocking user:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+  
   return (
     <div className="flex-1 bg-white/40 backdrop-blur-sm p-8 overflow-y-auto">
       <div className="max-w-6xl mx-auto">
@@ -44,6 +128,75 @@ export default function AdminView({ adminStats }: AdminViewProps) {
           ))}
         </div>
 
+        <Card className="p-6 rounded-3xl bg-white/80 backdrop-blur-sm border-purple-100 mb-6">
+          <h2 className="text-xl font-bold mb-6 flex items-center gap-2">
+            <Icon name="Users" size={24} className="text-purple-600" />
+            Управление пользователями
+          </h2>
+          <ScrollArea className="h-96">
+            <div className="space-y-3">
+              {users.map((user) => (
+                <div
+                  key={user.id}
+                  className="flex items-center justify-between p-4 rounded-2xl bg-white border border-purple-100 hover:shadow-md transition-all"
+                >
+                  <div className="flex items-center gap-4 flex-1">
+                    <div className="relative">
+                      <div className="text-3xl">{user.avatar}</div>
+                      {user.online && (
+                        <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-white" />
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-semibold">{user.name}</h3>
+                        {user.isAdmin && (
+                          <Badge className="bg-pink-500 text-white text-xs">
+                            <Icon name="Shield" size={12} className="mr-1" />
+                            Admin
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="text-sm text-muted-foreground">@{user.username}</p>
+                      <p className="text-xs text-muted-foreground">Регистрация: {user.createdAt}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {user.online ? (
+                      <Badge className="bg-green-500 text-white">В сети</Badge>
+                    ) : (
+                      <Badge variant="outline">Оффлайн</Badge>
+                    )}
+                    {user.isBlocked ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleUnblockUser(user.id)}
+                        disabled={loading}
+                        className="rounded-full border-green-500 text-green-500 hover:bg-green-50"
+                      >
+                        <Icon name="Unlock" size={14} className="mr-1" />
+                        Разблокировать
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleBlockUser(user.id)}
+                        disabled={loading || user.isAdmin}
+                        className="rounded-full border-red-500 text-red-500 hover:bg-red-50"
+                      >
+                        <Icon name="Ban" size={14} className="mr-1" />
+                        Блокировать
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </ScrollArea>
+        </Card>
+        
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Card className="p-6 rounded-3xl bg-white/80 backdrop-blur-sm border-purple-100">
             <h2 className="text-xl font-bold mb-6 flex items-center gap-2">
